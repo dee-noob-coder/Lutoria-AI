@@ -201,7 +201,7 @@ export default function App() {
     if (resultImage) {
       const link = document.createElement('a');
       link.href = resultImage;
-      link.download = `CineGrade_Export_${Date.now()}.jpg`;
+      link.download = `Lutoria_Export_${Date.now()}.jpg`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -222,7 +222,7 @@ export default function App() {
                 <Film className="text-white w-4 h-4" />
             </div>
             <div>
-                <h1 className="text-sm font-bold text-white tracking-wide">CineGrade <span className="text-indigo-500">AI</span></h1>
+                <h1 className="text-sm font-bold text-white tracking-wide">Lutoria <span className="text-indigo-500">AI</span></h1>
                 <p className="text-[10px] text-zinc-500 font-mono">GPU ACCELERATED</p>
             </div>
         </div>
