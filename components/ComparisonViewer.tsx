@@ -98,11 +98,11 @@ export const ComparisonViewer: React.FC<ComparisonViewerProps> = ({ beforeImage,
       </div>
 
       {/* Labels */}
-      <div className="absolute top-4 left-4 bg-black/50 backdrop-blur text-white text-xs px-2 py-1 rounded border border-white/10 pointer-events-none">
-        ORIGINAL (REC.709)
+      <div className="absolute top-4 left-4 bg-indigo-600/80 backdrop-blur text-white text-xs px-2 py-1 rounded border border-indigo-400/30 pointer-events-none">
+        After
       </div>
-      <div className="absolute top-4 right-4 bg-indigo-600/80 backdrop-blur text-white text-xs px-2 py-1 rounded border border-indigo-400/30 pointer-events-none">
-        GRADED (FILM PRINT)
+      <div className="absolute top-4 right-4 bg-black/50 backdrop-blur text-white text-xs px-2 py-1 rounded border border-white/10 pointer-events-none">
+        Before
       </div>
     </div>
   );

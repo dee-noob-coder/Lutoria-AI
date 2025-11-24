@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Upload, Download, Sparkles, Wand2, 
@@ -136,10 +137,14 @@ export default function App() {
   const processGrade = async (preset?: Preset) => {
     if (!sourceImage || !sourceImgEl || !rendererRef.current) return;
 
-    // Default Params (Neutral)
+    // Default Cinematic Params
     let params: GradeParams = {
         lift: [0,0,0], gamma: [1,1,1], gain: [1,1,1],
-        saturation: 1, temperature: 0, tint: 0, mix: 0
+        saturation: 1, temperature: 0, tint: 0,
+        contrast: 0.1, vignette: 0.0, grain: 0.0, crosstalk: 0.1,
+        satRolloff: 0.0,
+        shadowTint: [0,0,0], highlightTint: [0,0,0],
+        mix: 0
     };
 
     updateProgress('Analyzing Source', 10);
@@ -153,7 +158,6 @@ export default function App() {
         if (preset.defaultParams) {
             params = { ...params, ...preset.defaultParams };
         }
-        // Presets don't use statistical transfer usually, just CDL
         params.mix = 0; 
     } 
     // MODE 2: Reference Match (Instant, Local Math)
@@ -223,7 +227,7 @@ export default function App() {
             </div>
             <div>
                 <h1 className="text-sm font-bold text-white tracking-wide">Lutoria <span className="text-indigo-500">AI</span></h1>
-                <p className="text-[10px] text-zinc-500 font-mono">GPU ACCELERATED</p>
+                <p className="text-[10px] text-zinc-500 font-mono">Turn your photos into films.</p>
             </div>
         </div>
 
@@ -277,7 +281,7 @@ export default function App() {
             {/* Presets Grid */}
             <section className="space-y-4">
                 <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center justify-between">
-                    Film Stocks 
+                    Looks Library 
                     <History size={12} className="text-zinc-600 hover:text-zinc-400 cursor-pointer" />
                 </h2>
                 <div className="grid grid-cols-1 gap-3">
@@ -309,10 +313,12 @@ export default function App() {
       {/* --- CENTER STAGE: Viewer --- */}
       <main className="flex-1 flex flex-col relative bg-[#050505]">
         <header className="h-16 border-b border-white/5 flex items-center justify-between px-8">
-            <div className="flex items-center gap-4">
-               <span className="text-xs text-zinc-500 font-mono">1920x1080 • REC.709</span>
+            <div className="flex-1 flex justify-center">
+                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+                    Get Cinematic Film look in 1 click
+                </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 absolute right-8">
                 <button 
                     disabled={!resultImage}
                     onClick={handleDownload}
@@ -399,24 +405,6 @@ export default function App() {
                 )}
              </div>
 
-             <div className="mt-auto">
-                 <div className="border border-zinc-800 rounded-lg p-3 space-y-2">
-                    <div className="flex justify-between text-[10px] text-zinc-500 uppercase font-bold">
-                        <span>Histogram</span>
-                        <span>RGB</span>
-                    </div>
-                    {/* Mock Histogram Visual */}
-                    <div className="h-16 flex items-end justify-between gap-0.5 opacity-50">
-                        {Array.from({ length: 40 }).map((_, i) => (
-                            <div 
-                                key={i} 
-                                className="w-1.5 bg-zinc-600 rounded-t-sm" 
-                                style={{ height: `${Math.random() * 100}%` }}
-                            />
-                        ))}
-                    </div>
-                 </div>
-             </div>
         </div>
       </aside>
 

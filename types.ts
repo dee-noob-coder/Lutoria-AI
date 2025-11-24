@@ -1,3 +1,4 @@
+
 export interface Preset {
   id: string;
   name: string;
@@ -30,14 +31,29 @@ export interface ColorStats {
 }
 
 export interface GradeParams {
-  lift: [number, number, number];
-  gamma: [number, number, number];
-  gain: [number, number, number];
+  // Primary CDL
+  lift: [number, number, number]; // Shadows
+  gamma: [number, number, number]; // Mids
+  gain: [number, number, number]; // Highlights
+  
+  // Basic
   saturation: number;
   temperature: number;
   tint: number;
-  // If present, these stats will drive the look
+  
+  // Cinematic / Filmic Ops
+  contrast: number; // S-Curve intensity
+  vignette: number; // Edge darkening
+  grain: number; // Film grain amount
+  crosstalk: number; // Film dye coupling simulation (0.0 to 1.0)
+  satRolloff: number; // Highlight desaturation (0.0 to 1.0)
+  
+  // Split Toning
+  shadowTint: [number, number, number]; // RGB push in shadows
+  highlightTint: [number, number, number]; // RGB push in highlights
+
+  // Statistical Match
   targetStats?: ColorStats | null;
   sourceStats?: ColorStats | null;
-  mix: number; // 0 to 1, how much of the target stats to apply
+  mix: number; // 0 to 1
 }

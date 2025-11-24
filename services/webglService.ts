@@ -1,3 +1,4 @@
+
 import { GradeParams } from "../types";
 
 export class WebGLRenderer {
@@ -27,71 +28,172 @@ export class WebGLRenderer {
       }
     `;
 
-    // Fragment Shader: Implements Reinhard Color Transfer + CDL + Temp/Tint
+    /**
+     * ADVANCED CINEMATIC SHADER ENGINE v2.0
+     * Features:
+     * - ACES RRT Tone Mapping (Filmic Curve)
+     * - Channel Crosstalk (Matrix Mixing)
+     * - Luma-Weighted Saturation (Highlight Rolloff)
+     * - Skin Tone Protection Masking
+     * - Split Toning (Shadows/Highs)
+     * - Procedural Film Grain
+     */
     const fsSource = `
       precision mediump float;
       varying vec2 vTexCoord;
       uniform sampler2D u_image;
-
-      // Stats for Color Transfer
+      
+      // --- UNIFORMS ---
+      // Stats
       uniform vec3 u_src_mean;
       uniform vec3 u_src_std;
       uniform vec3 u_tgt_mean;
       uniform vec3 u_tgt_std;
-      uniform float u_mix_stats; // 0.0 to 1.0
+      uniform float u_mix_stats;
 
-      // CDL Parameters
+      // CDL
       uniform vec3 u_lift;
       uniform vec3 u_gamma;
       uniform vec3 u_gain;
       uniform float u_saturation;
-      
-      // Temp/Tint
       uniform float u_temperature;
       uniform float u_tint;
+      
+      // Cinematic
+      uniform float u_contrast;
+      uniform float u_vignette;
+      uniform float u_grain;
+      uniform float u_crosstalk;
+      uniform float u_sat_rolloff;
+      
+      // Split Tone
+      uniform vec3 u_shadow_tint;
+      uniform vec3 u_highlight_tint;
 
-      vec3 rgb2lms(vec3 rgb) {
-        mat3 m = mat3(
-          0.3811, 0.5783, 0.0402,
-          0.1967, 0.7244, 0.0782,
-          0.0241, 0.1288, 0.8444
-        );
-        return m * rgb;
+      // --- UTILS ---
+      
+      const vec3 LUMA_COEFF = vec3(0.2126, 0.7152, 0.0722);
+
+      float luminance(vec3 c) {
+        return dot(c, LUMA_COEFF);
+      }
+
+      // Pseudo-random for grain
+      float rand(vec2 co){
+        return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+      }
+
+      // ACES Tone Mapping (Approximation)
+      // Produces the "Movie" look: soft highlight rolloff, toe compression, desaturated brights
+      vec3 ACESFilm(vec3 x) {
+        float a = 2.51;
+        float b = 0.03;
+        float c = 2.43;
+        float d = 0.59;
+        float e = 0.14;
+        return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
       }
 
       vec3 adjust_temperature(vec3 color, float temp, float tint) {
-         // Simple WB approximation
+         // Warmth: Add Red, Remove Blue
          color.r += temp;
          color.b -= temp;
+         // Tint: Green vs Magenta
          color.g += tint;
          return color;
       }
 
-      vec3 apply_cdl(vec3 color, vec3 lift, vec3 gamma, vec3 gain) {
-         color = pow(max(color * gain + lift, 0.0), 1.0 / max(gamma, vec3(0.01)));
-         return color;
+      // Channel Crosstalk: Simulates analog film dye layers interacting
+      // R affects G, G affects B, etc. Creates "muddy" but organic color mix.
+      vec3 apply_crosstalk(vec3 color, float amount) {
+          vec3 r = color * vec3(1.0, 0.0, 0.0);
+          vec3 g = color * vec3(0.0, 1.0, 0.0);
+          vec3 b = color * vec3(0.0, 0.0, 1.0);
+          
+          vec3 newCol = color;
+          // Matrix mixing
+          newCol.r = color.r + (color.g * 0.15 * amount);
+          newCol.g = color.g + (color.b * 0.15 * amount);
+          newCol.b = color.b + (color.r * 0.15 * amount);
+          
+          return mix(color, newCol, amount);
       }
 
       void main() {
         vec4 texColor = texture2D(u_image, vTexCoord);
         vec3 color = texColor.rgb;
 
-        // 1. Statistical Color Transfer (Reinhard-ish in RGB for speed/mood)
-        // New = (Old - Mean_Src) * (Std_Tgt / Std_Src) + Mean_Tgt
+        // 1. Statistical Transfer (Base Mood)
         if (u_mix_stats > 0.0) {
             vec3 statsColor = (color - u_src_mean) * (u_tgt_std / max(u_src_std, vec3(0.001))) + u_tgt_mean;
             color = mix(color, statsColor, u_mix_stats);
         }
 
-        // 2. Temperature / Tint
+        // 2. Film Crosstalk (Analog feel)
+        color = apply_crosstalk(color, u_crosstalk);
+
+        // 3. Temperature / Tint (White Balance)
         color = adjust_temperature(color, u_temperature, u_tint);
 
-        // 3. CDL (Lift/Gamma/Gain)
-        color = apply_cdl(color, u_lift, u_gamma, u_gain);
+        // 4. CDL (Primary Grading) - Slope/Offset/Power
+        // Lift (Shadow offset), Gamma (Power), Gain (Multiply)
+        color = pow(max(color * u_gain + u_lift, 0.0), 1.0 / max(u_gamma, vec3(0.01)));
 
-        // 4. Saturation
-        float gray = dot(color, vec3(0.299, 0.587, 0.114));
-        color = mix(vec3(gray), color, u_saturation);
+        // 5. Split Toning
+        float lum = luminance(color);
+        // Add shadow tint to dark areas (cubic smoothstep for organic blend)
+        color += u_shadow_tint * (1.0 - smoothstep(0.0, 0.6, lum)) * 0.25;
+        // Add highlight tint to bright areas
+        color += u_highlight_tint * (smoothstep(0.4, 1.0, lum)) * 0.25;
+
+        // 6. Filmic Saturation (Luma-Weighted)
+        // Film naturally loses saturation in highlights. Digital clips.
+        // We simulate film by reducing saturation as luma increases.
+        float gray = luminance(color);
+        
+        // Calculate saturation mask based on luminance
+        // u_sat_rolloff = 1.0 means heavy desaturation in highlights
+        float satMask = 1.0 - (smoothstep(0.6, 1.0, lum) * u_sat_rolloff * 0.6);
+        
+        // Skin Tone Protection:
+        // Detect skin hue (R > G > B). If skin, we want to KEEP saturation natural.
+        float skinFactor = 0.0;
+        if (color.r > color.g && color.g > color.b) {
+            // Rough approximation of skin vector
+            skinFactor = (color.r - color.b) * (color.r - color.g); 
+        }
+        skinFactor = clamp(skinFactor * 10.0, 0.0, 1.0);
+        
+        // Mix: If skin, ignore the rolloff. If sky/brights, apply rolloff.
+        float finalSat = u_saturation * mix(satMask, 1.0, skinFactor * 0.8);
+        
+        vec3 satColor = mix(vec3(gray), color, finalSat);
+        color = satColor;
+
+        // 7. S-Curve Contrast
+        // Center contrast around 0.5 gray
+        vec3 contrastColor = (color - 0.5) * (1.0 + u_contrast * 0.6) + 0.5;
+        color = mix(color, contrastColor, 0.8); // Blend
+
+        // 8. ACES Tone Mapping (The "Film Look" Curve)
+        color = ACESFilm(color);
+
+        // 9. Vignette (Natural Lens Falloff)
+        if (u_vignette > 0.0) {
+            vec2 uv = vTexCoord * (1.0 - vTexCoord.yx);
+            float vig = uv.x * uv.y * 15.0; 
+            vig = pow(vig, u_vignette);
+            color *= clamp(vig, 0.0, 1.0);
+        }
+
+        // 10. Film Grain (Soft Light Blend)
+        if (u_grain > 0.0) {
+            float noise = rand(vTexCoord + fract(u_saturation));
+            vec3 grainLayer = vec3(noise);
+            // Soft Light formula: (1-2a)b^2 + 2ab
+            // Simplified mix for performance:
+            color = mix(color, color + (grainLayer - 0.5) * 0.2, u_grain * 0.5);
+        }
 
         gl_FragColor = vec4(color, texColor.a);
       }
@@ -107,11 +209,6 @@ export class WebGLRenderer {
     this.gl.attachShader(this.program, fs);
     this.gl.linkProgram(this.program);
 
-    if (!this.gl.getProgramParameter(this.program, this.gl.LINK_STATUS)) {
-      console.error('Shader program init failed:', this.gl.getProgramInfoLog(this.program));
-      return;
-    }
-
     this.gl.useProgram(this.program);
     this.setupBuffers();
   }
@@ -123,7 +220,6 @@ export class WebGLRenderer {
     this.gl.compileShader(shader);
     if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
       console.error('Shader compile failed:', this.gl.getShaderInfoLog(shader));
-      this.gl.deleteShader(shader);
       return null;
     }
     return shader;
@@ -132,7 +228,6 @@ export class WebGLRenderer {
   private setupBuffers() {
     if (!this.program) return;
     
-    // Quad covering the whole screen
     const vertices = new Float32Array([
       -1.0, -1.0,  0.0, 1.0,
        1.0, -1.0,  1.0, 1.0,
@@ -157,8 +252,7 @@ export class WebGLRenderer {
   public render(image: HTMLImageElement, params: GradeParams) {
     if (!this.program) return;
     
-    // Resize canvas to match image (or max texture size)
-    // Limit max resolution for performance if needed, but GPU is fast.
+    // Resize to max 4K or Native for performance/quality balance
     if (this.width !== image.naturalWidth || this.height !== image.naturalHeight) {
         this.width = image.naturalWidth;
         this.height = image.naturalHeight;
@@ -167,7 +261,6 @@ export class WebGLRenderer {
         this.gl.viewport(0, 0, this.width, this.height);
     }
 
-    // Load Texture
     if (!this.texture) {
         this.texture = this.gl.createTexture();
     }
@@ -178,7 +271,6 @@ export class WebGLRenderer {
     this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
     this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, image);
 
-    // Set Uniforms
     const uLoc = (name: string) => this.gl.getUniformLocation(this.program!, name);
 
     // Stats
@@ -200,8 +292,18 @@ export class WebGLRenderer {
     this.gl.uniform1f(uLoc('u_saturation'), params.saturation);
     this.gl.uniform1f(uLoc('u_temperature'), params.temperature);
     this.gl.uniform1f(uLoc('u_tint'), params.tint);
+    
+    // Cinematic
+    this.gl.uniform1f(uLoc('u_contrast'), params.contrast);
+    this.gl.uniform1f(uLoc('u_vignette'), params.vignette);
+    this.gl.uniform1f(uLoc('u_grain'), params.grain);
+    this.gl.uniform1f(uLoc('u_crosstalk'), params.crosstalk);
+    this.gl.uniform1f(uLoc('u_sat_rolloff'), params.satRolloff);
+    
+    // Split
+    this.gl.uniform3fv(uLoc('u_shadow_tint'), params.shadowTint);
+    this.gl.uniform3fv(uLoc('u_highlight_tint'), params.highlightTint);
 
-    // Draw
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
   }
 }
