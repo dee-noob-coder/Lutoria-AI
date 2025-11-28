@@ -324,7 +324,7 @@ export default function App() {
                     onClick={handleDownload}
                     className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-lg text-xs font-bold hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
-                    <Download size={14} /> Export
+                    <Download size={14} /> Download NOw
                 </button>
             </div>
         </header>
